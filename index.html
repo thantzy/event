@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ThanHub Premium Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #a050ff;
+            --secondary: #00dcff;
+            --accent: #ff007a;
+            --bg: #030305;
+            --sidebar-bg: #08080c;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(160, 80, 255, 0.2);
+            --glow: 0 0 20px rgba(160, 80, 255, 0.15);
+            --sidebar-w: 280px;
+        }
+
+        /* --- TAMBAHAN EFEK ANIMASI BACKGROUND --- */
+        @keyframes gradientMove {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes pulseGlow {
+            0% { box-shadow: 0 0 15px rgba(160, 80, 255, 0.2); }
+            50% { box-shadow: 0 0 30px rgba(160, 80, 255, 0.4); }
+            100% { box-shadow: 0 0 15px rgba(160, 80, 255, 0.2); }
+        }
+
+        * { box-sizing: border-box; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        body { 
+            background: radial-gradient(circle at top right, #1a0b2e, #030305, #05161a);
+            background-size: 200% 200%;
+            animation: gradientMove 15s ease infinite;
+            color: #ffffff; 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            margin: 0;
+            display: flex;
+            overflow-x: hidden;
+            letter-spacing: -0.02em;
+        }
+
+        /* --- SIDEBAR TOGGLE LOGIC --- */
+        .sidebar {
+            width: var(--sidebar-w);
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 30px 20px;
+            position: fixed;
+            height: 100vh;
+            z-index: 1000;
+            left: 0; /* Default buka */
+            backdrop-filter: blur(10px);
+        }
+
+        /* Class untuk menutup sidebar */
+        .sidebar.closed {
+            left: calc(-1 * var(--sidebar-w));
+        }
+
+        .main-content { 
+            margin-left: var(--sidebar-w); 
+            flex: 1; 
+            padding: 50px 60px; 
+            min-height: 100vh; 
+            transition: margin-left 0.3s ease;
+        }
+
+        /* Content melebar jika sidebar tutup */
+        .sidebar.closed ~ .main-content {
+            margin-left: 0;
+        }
+
+        /* Tombol Buka/Tutup (Floating) */
+        .toggle-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1100;
+            background: var(--sidebar-bg);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--glow);
+        }
+
+        .toggle-btn:hover {
+            background: var(--primary);
+            transform: scale(1.1);
+        }
+
+        .sidebar.closed ~ .toggle-btn {
+            left: 20px;
+        }
+
+        /* Overlay untuk mobile agar saat sidebar buka, konten belakang redup */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
+        /* --- SISA CSS TETAP SAMA --- */
+        .sidebar-brand {
+            font-weight: 800; font-size: 24px;
+            background: linear-gradient(to right, var(--secondary), #ffffff, var(--primary));
+            background-size: 200% auto;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            animation: gradientMove 3s linear infinite;
+            margin-bottom: 50px; display: flex; align-items: center; gap: 10px;
+            margin-top: 40px; /* Jarak dari tombol toggle */
+        }
+
+        .nav-link {
+            text-decoration: none; color: #666; padding: 14px 18px;
+            border-radius: 14px; margin-bottom: 10px; font-weight: 600;
+            display: flex; align-items: center; gap: 12px; border: 1px solid transparent;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(160, 80, 255, 0.08); color: white;
+            border-color: var(--glass-border); box-shadow: var(--glow);
+            transform: translateX(5px);
+        }
+
+        .discord-btn {
+            margin-top: auto; background: linear-gradient(45deg, #5865F2, #4752c4);
+            color: white; text-align: center; padding: 16px; border-radius: 16px;
+            text-decoration: none; font-weight: 800; box-shadow: 0 10px 30px rgba(88, 101, 242, 0.2);
+        }
+        .discord-btn:hover { filter: brightness(1.2); transform: translateY(-3px); }
+
+        .header-desc h1 { 
+            font-size: 38px; font-weight: 800; margin-bottom: 10px; 
+            background: linear-gradient(white, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .header-desc p { color: #888; font-size: 16px; }
+
+        .stats-banner { display: flex; gap: 15px; margin: 20px 0; flex-wrap: wrap; }
+        .stat-card-top { 
+            background: var(--card-bg); border: 1px solid var(--border); padding: 24px; border-radius: 24px; 
+            flex: 1; backdrop-filter: blur(10px); min-width: 120px; position: relative; overflow: hidden;
+        }
+        .stat-card-top::after {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
+        }
+        .stat-card-top h3 { margin: 0; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-card-top p { margin: 8px 0 0; font-size: 28px; font-weight: 800; color: var(--secondary); text-shadow: 0 0 10px rgba(0, 220, 255, 0.3); }
+
+        .search-container { margin-bottom: 40px; position: relative; }
+        .search-input { width: 100%; background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 18px 25px; border-radius: 20px; color: white; font-size: 15px; outline: none; }
+        .search-input:focus { border-color: var(--primary); box-shadow: 0 0 25px rgba(160, 80, 255, 0.2); background: rgba(255,255,255,0.05); }
+
+        .quick-chips { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+        .chip { cursor: pointer; font-size: 11px; background: var(--card-bg); padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); color: #888; }
+        .chip:hover { border-color: var(--primary); color: white; background: rgba(160, 80, 255, 0.1); transform: scale(1.05); }
+
+        #server-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 25px; }
+
+        .card { 
+            background: var(--card-bg); backdrop-filter: blur(16px); border: 1px solid var(--border); 
+            padding: 28px; border-radius: 28px; position: relative; 
+            animation: slideUp 0.5s ease forwards;
+            overflow: hidden;
+        }
+        .card::before {
+            content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
+            transition: 0.5s;
+        }
+        .card:hover::before { left: 100%; }
+        
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .card:hover { 
+            border-color: var(--glass-border); transform: translateY(-10px); 
+            background: rgba(255,255,255,0.05);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+        }
+
+        .event-badge { 
+            background: rgba(160, 80, 255, 0.12); color: var(--primary); padding: 6px 14px; 
+            border-radius: 10px; font-size: 10px; font-weight: 800; text-transform: uppercase; 
+            animation: pulseGlow 2s infinite;
+        }
+        .event-title { font-weight: 800; font-size: 22px; margin: 15px 0; color: #fff; }
+
+        .job-id-wrapper { background: rgba(0,0,0,0.3); border-radius: 15px; padding: 12px 16px; margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); }
+        .job-id-text { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #666; }
+        .copy-icon { background: none; border: none; cursor: pointer; color: var(--secondary); font-size: 16px; }
+        .copy-icon:active { transform: scale(0.8); }
+
+        .stats-row { display: flex; gap: 30px; margin-bottom: 25px; }
+        .stat-label { font-size: 10px; color: #555; text-transform: uppercase; font-weight: 800; }
+        .stat-value { font-size: 15px; font-weight: 700; color: var(--secondary); margin-top: 4px; }
+
+        .btn-join-modern { 
+            background: #fff; color: #000; text-align: center; padding: 16px; border-radius: 18px; 
+            text-decoration: none; font-weight: 800; font-size: 13px; text-transform: uppercase; 
+            display: block; border: none; cursor: pointer;
+        }
+        .btn-join-modern:hover { 
+            background: var(--primary); color: #fff; 
+            box-shadow: 0 10px 25px rgba(160, 80, 255, 0.4);
+            transform: scale(1.02);
+        }
+
+        .pagination { margin: 60px 0; display: flex; gap: 10px; justify-content: center; }
+        .page-btn { background: var(--card-bg); border: 1px solid var(--border); color: #888; width: 45px; height: 45px; border-radius: 15px; cursor: pointer; font-weight: 700; }
+        .page-btn.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: var(--glow); }
+
+        .ai-message { 
+            background: linear-gradient(145deg, rgba(160, 80, 255, 0.1), transparent); 
+            border: 1px solid var(--glass-border); padding: 20px; border-radius: 20px; 
+            margin-bottom: 30px; font-weight: 600; display: flex; align-items: center; gap: 15px;
+            animation: slideUp 0.4s ease;
+        }
+
+        /* Mobile */
+        @media (max-width: 1024px) {
+            .sidebar { left: calc(-1 * var(--sidebar-w)); }
+            .sidebar.active { left: 0; }
+            .main-content { margin-left: 0; padding: 80px 20px; }
+            .sidebar-overlay.active { display: block; }
+        }
+        /* --- ANIMASI GANTI WARNA UNTUK LABEL DETECTED --- */
+    @keyframes colorShift {
+        0% { 
+            background: rgba(160, 80, 255, 0.15); 
+            color: #a050ff; 
+            box-shadow: 0 0 10px rgba(160, 80, 255, 0.3);
+            border-color: rgba(160, 80, 255, 0.5);
+        }
+        33% { 
+            background: rgba(0, 220, 255, 0.15); 
+            color: #00dcff; 
+            box-shadow: 0 0 15px rgba(0, 220, 255, 0.4);
+            border-color: rgba(0, 220, 255, 0.5);
+        }
+        66% { 
+            background: rgba(255, 0, 122, 0.15); 
+            color: #ff007a; 
+            box-shadow: 0 0 10px rgba(255, 0, 122, 0.3);
+            border-color: rgba(255, 0, 122, 0.5);
+        }
+        100% { 
+            background: rgba(160, 80, 255, 0.15); 
+            color: #a050ff; 
+            box-shadow: 0 0 10px rgba(160, 80, 255, 0.3);
+            border-color: rgba(160, 80, 255, 0.5);
+        }
+    }
+
+    .event-badge { 
+        display: inline-block;
+        padding: 6px 14px; 
+        border-radius: 10px; 
+        font-size: 10px; 
+        font-weight: 800; 
+        text-transform: uppercase; 
+        border: 1px solid transparent;
+        /* Menjalankan animasi ganti warna selama 3 detik secara berulang */
+        animation: colorShift 4s infinite ease-in-out;
+        letter-spacing: 1px;
+    }
+    </style>
+</head>
+<body>
+
+    <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-brand">⚡ <span>ThanHub</span></div>
+        <a href="javascript:void(0)" class="nav-link active" id="nav-dashboard" onclick="switchPage('dashboard')">🏠 <span>Dashboard</span></a>
+        <a href="javascript:void(0)" class="nav-link" id="nav-ai" onclick="switchPage('ai-search')">🤖 <span>AI Search</span></a>
+        <a href="https://discord.gg/thanhub" target="_blank" class="discord-btn">Discord</a>
+    </div>
+
+    <div class="main-content">
+        <div id="page-dashboard">
+            <div class="header-desc">
+                <h1>Server Explorer</h1>
+                <p>Monitoring event monster secara real-time.</p>
+            </div>
+            <div class="stats-banner">
+                <div class="stat-card-top"><h3>Servers</h3><p id="stat-servers">0</p></div>
+                <div class="stat-card-top"><h3>Hunters</h3><p id="stat-players">0</p></div>
+                <div class="stat-card-top"><h3>Hottest</h3><p id="stat-rare">-</p></div>
+            </div>
+            <div class="search-container">
+                <input type="text" id="searchInput" class="search-input" placeholder="Cari Monster (e.g. Leviathan, Moby)...">
+            </div>
+            <div id="server-list"></div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+
+        <div id="page-ai-search" style="display: none;">
+            <div class="header-desc">
+                <h1>AI Assistant</h1>
+                <p>Analisa server otomatis dengan gaya bahasa santai.</p>
+            </div>
+            <div class="search-container" style="margin-top: 40px;">
+                <div style="display: flex; gap: 15px;">
+                    <input type="text" id="aiInput" class="search-input" placeholder="Tanya apa aja... (e.g. 'Cari levi yang rame')">
+                    <button onclick="askAI()" class="btn-join-modern" style="width: 150px; cursor: pointer; border: none; background: var(--primary); color: white;">ANALISA</button>
+                </div>
+                <div class="quick-chips">
+                    <span class="chip" onclick="setAiInput('Leviathan sepi')">🌊 Levi Sepi</span>
+                    <span class="chip" onclick="setAiInput('Server paling rame')">🔥 Paling Rame</span>
+                    <span class="chip" onclick="setAiInput('Hujan meteor')">🌧️ Cari Hujan</span>
+                </div>
+            </div>
+            <div id="ai-chat-response"></div>
+        </div>
+    </div>
+
+<script>
+    const SB_URL = "https://jmfniwyhitvvqhxcqqot.supabase.co";
+    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptZm5pd3loaXR2dnFoeGNxcW90Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MDM1MjEsImV4cCI6MjA4NzA3OTUyMX0.CMXMBQvc-f-x9YeA1JXVQa90s2QX1SQS_B1UKVEHhoA";
+    const PLACE_ID = 16732694052;
+    
+    const _supabase = supabase.createClient(SB_URL, SB_KEY);
+    let currentPage = 1;
+    const itemsPerPage = 8;
+    let currentDataCached = [];
+
+    // FUNGSI BUKA TUTUP SIDEBAR
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        
+        // Cek screen size
+        if (window.innerWidth > 1024) {
+            sidebar.classList.toggle('closed');
+        } else {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        }
+    }
+
+    async function loadServers() {
+        const tenMinAgo = Math.floor(Date.now() / 1000) - 600;
+        const { data, error } = await _supabase
+            .from('ThanHub')
+            .select('*')
+            .gt('lastUpdated', tenMinAgo)
+            .order('lastUpdated', { ascending: false });
+
+        if (!error && data) {
+            currentDataCached = data.slice(0, 50);
+            updateStats(currentDataCached);
+            filterAndRender();
+        }
+    }
+
+    function updateStats(data) {
+        document.getElementById('stat-servers').innerText = data.length;
+        let players = 0;
+        let events = {};
+        data.forEach(s => {
+            players += parseInt(s.players.split('/')[0]) || 0;
+            events[s.event] = (events[s.event] || 0) + 1;
+        });
+        document.getElementById('stat-players').innerText = players;
+        const top = Object.keys(events).reduce((a, b) => events[a] > events[b] ? a : b, "-");
+        document.getElementById('stat-rare').innerText = top;
+    }
+
+    function filterAndRender() {
+        const keyword = document.getElementById('searchInput').value.toLowerCase();
+        const filtered = currentDataCached.filter(s => s.event.toLowerCase().includes(keyword));
+        renderList(filtered);
+        renderPagination(filtered);
+    }
+
+    function renderList(allData) {
+        const list = document.getElementById('server-list');
+        list.innerHTML = "";
+        const start = (currentPage - 1) * itemsPerPage;
+        const paginatedData = allData.slice(start, start + itemsPerPage);
+
+        paginatedData.forEach(s => {
+            const time = new Date(s.lastUpdated * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            list.innerHTML += `
+                <div class="card">
+                    <div class="card-header"><span class="event-badge">Detected</span><span style="font-size:10px; color:#555; margin-left:10px">${time}</span></div>
+                    <div class="event-title">${s.event}</div>
+                    <div class="job-id-wrapper">
+                        <div class="job-id-text">${s.jobId.substring(0,20)}...</div>
+                        <button class="copy-icon" onclick="navigator.clipboard.writeText('${s.jobId}')">📋</button>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat-item"><div class="stat-label">Players</div><div class="stat-value">${s.players}</div></div>
+                        <div class="stat-item"><div class="stat-label">Status</div><div class="stat-value" style="color:#00ff88">Active</div></div>
+                    </div>
+                    <a href="roblox://experiences/start?placeId=${PLACE_ID}&gameInstanceId=${s.jobId}" class="btn-join-modern">Teleport</a>
+                </div>`;
+        });
+    }
+
+    function renderPagination(allData) {
+        const total = Math.ceil(allData.length / itemsPerPage);
+        const container = document.getElementById('pagination');
+        container.innerHTML = "";
+        if (total <= 1) return;
+        for (let i = 1; i <= total; i++) {
+            const btn = document.createElement('button');
+            btn.innerText = i; btn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+            btn.onclick = () => { currentPage = i; renderList(allData); renderPagination(allData); window.scrollTo({top: 0, behavior:'smooth'}); };
+            container.appendChild(btn);
+        }
+    }
+
+    function switchPage(page) {
+        document.getElementById('page-dashboard').style.display = page === 'dashboard' ? 'block' : 'none';
+        document.getElementById('page-ai-search').style.display = page === 'ai-search' ? 'block' : 'none';
+        document.getElementById('nav-dashboard').classList.toggle('active', page === 'dashboard');
+        document.getElementById('nav-ai').classList.toggle('active', page === 'ai-search');
+        
+        // Tutup sidebar di mobile setelah pilih menu
+        if (window.innerWidth <= 1024) {
+            document.getElementById('sidebar').classList.remove('active');
+            document.getElementById('overlay').classList.remove('active');
+        }
+    }
+
+    function setAiInput(val) { document.getElementById('aiInput').value = val; askAI(); }
+
+    async function askAI() {
+        const input = document.getElementById('aiInput').value.toLowerCase();
+        const container = document.getElementById('ai-chat-response');
+        if (!input) return;
+
+        container.innerHTML = `<div class="ai-message">🤖 Sedang menganalisa...</div>`;
+        await new Promise(r => setTimeout(r, 1000));
+
+        let res = [...currentDataCached];
+        if (input.includes("sepi")) res.sort((a,b) => parseInt(a.players) - parseInt(b.players));
+        else if (input.includes("rame")) res.sort((a,b) => parseInt(b.players) - parseInt(a.players));
+        
+        const keywords = ["leviathan", "kraken", "whale", "serpent", "terror", "shark", "rain", "moon", "hujan"];
+        const found = keywords.find(w => input.includes(w));
+        if (found) res = res.filter(s => s.event.toLowerCase().includes(found === "hujan" ? "rain" : found));
+
+        if (res.length > 0) {
+            container.innerHTML = `<div class="ai-message">🤖 Berhasil menemukan server:</div>`;
+            const grid = document.createElement('div');
+            grid.id = "server-list";
+            res.slice(0, 3).forEach(s => {
+                grid.innerHTML += `
+                    <div class="card" style="border-left: 4px solid var(--secondary);">
+                        <div class="event-title">🔥 ${s.event}</div>
+                        <div class="stats-row">
+                            <div class="stat-item"><div class="stat-label">Players</div><div class="stat-value">${s.players}</div></div>
+                        </div>
+                        <a href="roblox://experiences/start?placeId=${PLACE_ID}&gameInstanceId=${s.jobId}" class="btn-join-modern">GAS JOIN!</a>
+                    </div>`;
+            });
+            container.appendChild(grid);
+        } else {
+            container.innerHTML = `<div class="ai-message">🤖 Gak ketemu apa-apa bro.</div>`;
+        }
+    }
+
+    document.getElementById('searchInput').addEventListener('input', () => { currentPage = 1; filterAndRender(); });
+    loadServers();
+    setInterval(loadServers, 15000);
+</script>
+</body>
+</html>
